@@ -12,7 +12,7 @@ export default function Browse() {
   const [priceRange, setPriceRange] = useState('Any Price');
   const [sortBy, setSortBy] = useState('Newest First');
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 8;
+  const pageSize = 16;
 
   const allListings = useMemo(() => getAllListings(), []);
 
