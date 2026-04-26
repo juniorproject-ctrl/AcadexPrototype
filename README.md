@@ -4,7 +4,7 @@ Acadex is a UAE-focused student marketplace prototype for browsing listings, pos
 
 ## Live Demo
 
-https://your-app.onrender.com
+https://acadexprototype.onrender.com
 
 ## Local server
 
