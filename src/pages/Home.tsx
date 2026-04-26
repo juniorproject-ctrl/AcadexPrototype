@@ -24,7 +24,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto text-center mb-12">
           <h1 className="text-5xl text-brand-navy mb-4">Your Campus Marketplace</h1>
           <p className="text-brand-light-navy max-w-2xl mx-auto">
-            Buy, sell, and discover within your educational community.<br/>
+            Buy, sell, and discover within your educational community.<br />
             From textbooks to tutoring, find it all here.
           </p>
         </div>
@@ -76,13 +76,13 @@ export default function Home() {
           <h2 className="text-brand-cream text-2xl mb-1 font-bold">Featured Listings</h2>
           <p className="text-brand-cream text-xs opacity-80 mb-10">Recently posted on campus</p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
             {featured.map((item) => (
-              <div key={item.id} className="bg-white rounded-2xl overflow-hidden shadow-xl flex flex-col h-full">
-                <div className="relative aspect-square">
-                  <img src={item.image} alt={item.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <div key={item.id} className="bg-white rounded-2xl overflow-hidden shadow-xl flex flex-col h-full min-h-[27rem]">
+                <div className="relative aspect-[4/3] flex-shrink-0 bg-gray-50">
+                  <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
                 </div>
-                <div className="p-5 flex-1 flex flex-col">
+                <div className="p-5 flex-1 flex flex-col min-h-[12rem]">
                   <h3 className="text-sm font-bold text-brand-navy line-clamp-2 mb-1">{item.title}</h3>
                   <p className="text-[10px] text-gray-500 mb-2">{item.condition} • {item.location}</p>
                   <p className="text-lg font-bold text-brand-navy mt-auto">AED {item.price}</p>
