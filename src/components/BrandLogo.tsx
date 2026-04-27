@@ -7,9 +7,9 @@ type BrandLogoProps = {
 };
 
 const sizeClasses = {
-  sm: 'h-10',
-  md: 'h-14',
-  lg: 'h-20',
+  sm: 'h-14',
+  md: 'h-16',
+  lg: 'h-24',
 };
 
 export default function BrandLogo({ size = 'md', linked = false, className = '' }: BrandLogoProps) {
