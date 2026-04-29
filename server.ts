@@ -24,21 +24,39 @@ function isAllowedUniversityEmail(email: string) {
   return allowedUniversityDomainPattern.test(email.trim());
 }
 
-function buildTransporter() {
+async function buildTransporter() {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
 
   if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) {
     throw new Error('Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS in .env.local.');
   }
 
+  let transportHost = SMTP_HOST;
+  let tlsServername: string | undefined;
+
+  try {
+    const ipv4Addresses = await dns.promises.resolve4(SMTP_HOST);
+    if (ipv4Addresses.length) {
+      transportHost = ipv4Addresses[0];
+      tlsServername = SMTP_HOST;
+    }
+  } catch {
+    tlsServername = SMTP_HOST;
+  }
+
   return nodemailer.createTransport({
-    host: SMTP_HOST,
+    host: transportHost,
     port: Number(SMTP_PORT),
     secure: Number(SMTP_PORT) === 465,
     auth: {
       user: SMTP_USER,
       pass: SMTP_PASS,
     },
+    tls: tlsServername
+      ? {
+          servername: tlsServername,
+        }
+      : undefined,
   });
 }
 
@@ -80,7 +98,7 @@ async function startServer() {
     });
 
     try {
-      const transporter = buildTransporter();
+      const transporter = await buildTransporter();
       await transporter.sendMail({
         from: process.env.MAIL_FROM || process.env.SMTP_USER,
         to: normalizedEmail,
