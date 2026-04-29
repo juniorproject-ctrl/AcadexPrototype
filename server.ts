@@ -1,4 +1,5 @@
 import cors from 'cors';
+import dns from 'node:dns';
 import dotenv from 'dotenv';
 import express from 'express';
 import nodemailer from 'nodemailer';
@@ -6,17 +7,17 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 
 dotenv.config({ path: '.env.local' });
+dns.setDefaultResultOrder('ipv4first');
 
 type PendingSignup = {
   name: string;
   email: string;
   password: string;
-  role: 'Student' | 'Tutor' | 'Admin';
   code: string;
   expiresAt: number;
 };
 
-const allowedUniversityDomainPattern = /@(?:(?:[a-z0-9-]+\.)*ac\.ae|aus\.edu)$/i;
+const allowedUniversityDomainPattern = /@(?:[a-z0-9-]+\.)*(?:ac\.ae|edu|edu\.ae|ae)$/i;
 const pendingSignups = new Map<string, PendingSignup>();
 
 function isAllowedUniversityEmail(email: string) {
@@ -43,7 +44,7 @@ function buildTransporter() {
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT || 3000);
+  const PORT = 3000;
 
   app.use(cors());
   app.use(express.json({ limit: '10mb' }));
@@ -53,19 +54,18 @@ async function startServer() {
   });
 
   app.post('/api/auth/request-code', async (req, res) => {
-    const { name, email, password, role } = req.body as {
+    const { name, email, password } = req.body as {
       name?: string;
       email?: string;
       password?: string;
-      role?: 'Student' | 'Tutor' | 'Admin';
     };
 
-    if (!name?.trim() || !email?.trim() || !password || !role) {
-      return res.status(400).json({ error: 'Name, email, password, and role are required.' });
+    if (!name?.trim() || !email?.trim() || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required.' });
     }
 
     if (!isAllowedUniversityEmail(email)) {
-      return res.status(400).json({ error: 'Please use a UAE university email from a .ac.ae campus domain or aus.edu.' });
+      return res.status(400).json({ error: 'Please use a UAE university email ending in .ac.ae, .edu, .edu.ae, or .ae.' });
     }
 
     const code = String(Math.floor(1000 + Math.random() * 9000));
@@ -75,7 +75,6 @@ async function startServer() {
       name: name.trim(),
       email: normalizedEmail,
       password,
-      role,
       code,
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
@@ -153,7 +152,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on http://localhost:${PORT}`);
   });
 }
 
