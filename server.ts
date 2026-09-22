@@ -1,153 +1,59 @@
-import cors from 'cors';
-import dns from 'node:dns';
 import dotenv from 'dotenv';
-import express from 'express';
-import nodemailer from 'nodemailer';
-import path from 'path';
-import { createServer as createViteServer } from 'vite';
-
 dotenv.config({ path: '.env.local' });
-dns.setDefaultResultOrder('ipv4first');
 
-type PendingSignup = {
-  name: string;
-  email: string;
-  password: string;
-  code: string;
-  expiresAt: number;
-};
-
-const allowedUniversityDomainPattern = /@(?:[a-z0-9-]+\.)*(?:ac\.ae|edu|edu\.ae|ae)$/i;
-const pendingSignups = new Map<string, PendingSignup>();
-
-function isAllowedUniversityEmail(email: string) {
-  return allowedUniversityDomainPattern.test(email.trim());
-}
-
-async function buildTransporter() {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
-
-  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) {
-    throw new Error('Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS in .env.local.');
-  }
-
-  let transportHost = SMTP_HOST;
-  let tlsServername: string | undefined;
-
-  try {
-    const ipv4Addresses = await dns.promises.resolve4(SMTP_HOST);
-    if (ipv4Addresses.length) {
-      transportHost = ipv4Addresses[0];
-      tlsServername = SMTP_HOST;
-    }
-  } catch {
-    tlsServername = SMTP_HOST;
-  }
-
-  return nodemailer.createTransport({
-    host: transportHost,
-    port: Number(SMTP_PORT),
-    secure: Number(SMTP_PORT) === 465,
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS,
-    },
-    tls: tlsServername
-      ? {
-          servername: tlsServername,
-        }
-      : undefined,
-  });
-}
+import cors from 'cors';
+import express from 'express';
+import path from 'node:path';
+import { createServer as createViteServer } from 'vite';
+import { config } from './server/config';
+import { pool } from './server/db';
+import { errorHandler, notFound } from './server/errors';
+import authRoutes from './server/routes/auth';
+import listingRoutes from './server/routes/listings';
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+  const allowedOrigins = config.frontendOrigin.split(',').map((origin) => origin.trim()).filter(Boolean);
 
-  app.use(cors());
-  app.use(express.json({ limit: '10mb' }));
+  app.disable('x-powered-by');
+  app.use(cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error('Origin is not allowed by CORS.'));
+    },
+  }));
+  app.use(express.json({ limit: '1mb' }));
+  app.use('/uploads', express.static(config.uploadDirectory));
 
-  app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok' });
+  app.get('/api/health', async (_req, res, next) => {
+    try {
+      await pool.query('SELECT 1');
+      res.json({ status: 'ok' });
+    } catch (error) {
+      next(error);
+    }
   });
+  app.use('/api/auth', authRoutes);
+  app.use('/api/listings', listingRoutes);
 
-  app.post('/api/auth/request-code', async (req, res) => {
-    const { name, email, password } = req.body as {
-      name?: string;
-      email?: string;
-      password?: string;
-    };
-
-    if (!name?.trim() || !email?.trim() || !password) {
-      return res.status(400).json({ error: 'Name, email, and password are required.' });
-    }
-
-    if (!isAllowedUniversityEmail(email)) {
-      return res.status(400).json({ error: 'Please use a UAE university email ending in .ac.ae, .edu, .edu.ae, or .ae.' });
-    }
-
-    const code = '1234';
-    const normalizedEmail = email.trim().toLowerCase();
-
-    pendingSignups.set(normalizedEmail, {
-      name: name.trim(),
-      email: normalizedEmail,
-      password,
-      code,
-      expiresAt: Date.now() + 10 * 60 * 1000,
-    });
-
-    return res.json({ ok: true });
-  });
-
-  app.post('/api/auth/verify-code', (req, res) => {
-    const { email, code } = req.body as {
-      email?: string;
-      code?: string;
-    };
-
-    const normalizedEmail = email?.trim().toLowerCase();
-
-    if (!normalizedEmail || !code) {
-      return res.status(400).json({ error: 'Email and code are required.' });
-    }
-
-    const pendingSignup = pendingSignups.get(normalizedEmail);
-
-    if (!pendingSignup) {
-      return res.status(400).json({ error: 'No pending signup was found for this email. Please request a new code.' });
-    }
-
-    if (Date.now() > pendingSignup.expiresAt) {
-      pendingSignups.delete(normalizedEmail);
-      return res.status(400).json({ error: 'This code has expired. Please request a new one.' });
-    }
-
-    if (pendingSignup.code !== code.trim()) {
-      return res.status(400).json({ error: 'Incorrect verification code.' });
-    }
-
-    pendingSignups.delete(normalizedEmail);
-    return res.json({ ok: true });
-  });
-
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
+  if (config.nodeEnv !== 'production') {
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    app.get('*', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.use(notFound);
+  app.use(errorHandler);
+
+  app.listen(config.port, '0.0.0.0', () => {
+    console.log(`Server running on http://localhost:${config.port}`);
   });
 }
 
-startServer();
+startServer().catch((error) => {
+  console.error('Server startup failed:', error.message);
+  process.exit(1);
+});
